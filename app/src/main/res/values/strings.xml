@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">视频截图</string>
+    <string name="open_video">打开视频</string>
+    <string name="screenshot">截图</string>
+    <string name="save_all">保存全部</string>
+    <string name="watermark_position">水印位置</string>
+    <string name="no_video">请打开视频文件</string>
+    <string name="saved">已保存 %d 张截图</string>
+    <string name="no_screenshots">暂无截图</string>
+    <string name="permission_denied">需要存储权限才能保存</string>
+    <string name="add_device">添加设备</string>
+    <string name="edit_device">编辑设备</string>
+    <string name="delete_device">删除设备</string>
+    <string name="device_name_hint">设备名称（如：行车记录仪）</string>
+    <string name="confirm_delete">确认删除 "%s" ？</string>
+    <string name="no_device_selected">未选择设备</string>
+    <string name="device_default">默认（右下）</string>
+    <string name="device_config_label">设备配置</string>
+    <string name="name_empty">请输入设备名称</string>
+
+    <string-array name="watermark_positions">
+        <item>左上</item>
+        <item>右上</item>
+        <item>左下</item>
+        <item>右下</item>
+        <item>无水印</item>
+    </string-array>
+</resources>

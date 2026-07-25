@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="primary">#FF1976D2</color>
+    <color name="primary_dark">#FF1565C0</color>
+    <color name="accent">#FF4CAF50</color>
+    <color name="seek_bar_bg">#E0303030</color>
+    <color name="seek_bar_progress">#FF1976D2</color>
+    <color name="seek_bar_indicator">#FFFF5722</color>
+    <color name="thumbnail_border">#FF4CAF50</color>
+</resources>
