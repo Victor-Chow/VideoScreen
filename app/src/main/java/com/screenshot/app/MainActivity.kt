@@ -21,7 +21,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.screenshot.app.databinding.ActivityMainBinding
 import com.screenshot.app.databinding.DialogDeviceConfigBinding
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 import java.util.Timer
 import java.util.TimerTask
@@ -29,13 +28,12 @@ import java.util.TimerTask
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private lateinit var screenshotManager: ScreenshotManager
+    private lateinit var deviceConfigStore: DeviceConfigStore
     private var player: ExoPlayer? = null
     private var videoUri: Uri? = null
     private var videoPath: String? = null
     private var pfd: ParcelFileDescriptor? = null
-
-    private val screenshotManager = ScreenshotManager(this)
-    private val deviceConfigStore = DeviceConfigStore(this)
     private var deviceConfigs = listOf<DeviceConfig>()
     private var updateTimer: Timer? = null
     private var isRegionSelectMode = false
@@ -50,6 +48,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        screenshotManager = ScreenshotManager(applicationContext)
+        deviceConfigStore = DeviceConfigStore(this)
 
         setupPlayer()
         setupControls()
