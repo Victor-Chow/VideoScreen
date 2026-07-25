@@ -20,6 +20,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.screenshot.app.databinding.ActivityMainBinding
 import com.screenshot.app.databinding.DialogDeviceConfigBinding
+import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.Timer
@@ -31,13 +32,13 @@ class MainActivity : AppCompatActivity() {
     private var player: ExoPlayer? = null
     private var videoUri: Uri? = null
     private var videoPath: String? = null
-    private var videoDate: Date? = null
     private var pfd: ParcelFileDescriptor? = null
 
     private val screenshotManager = ScreenshotManager(this)
     private val deviceConfigStore = DeviceConfigStore(this)
     private var deviceConfigs = listOf<DeviceConfig>()
     private var updateTimer: Timer? = null
+    private var isRegionSelectMode = false
 
     private val openVideoLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -53,6 +54,7 @@ class MainActivity : AppCompatActivity() {
         setupPlayer()
         setupControls()
         loadDeviceConfigs()
+        loadOcrRegion()
         handleIntent(intent)
     }
 
@@ -69,9 +71,9 @@ class MainActivity : AppCompatActivity() {
             addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED) {
-                        val duration = duration
-                        if (duration > 0) {
-                            binding.seekBar.durationMs = duration
+                        val dur = duration
+                        if (dur > 0) {
+                            binding.seekBar.durationMs = dur
                         }
                     }
                 }
@@ -115,6 +117,54 @@ class MainActivity : AppCompatActivity() {
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
+
+        binding.btnSetRegion.setOnClickListener {
+            toggleRegionSelect()
+        }
+
+        binding.regionOverlay.onRegionChanged = { region ->
+            screenshotManager.ocrRecognizer.timeRegion = region
+            saveOcrRegion()
+        }
+    }
+
+    // --- Region select mode ---
+
+    private fun toggleRegionSelect() {
+        isRegionSelectMode = !isRegionSelectMode
+        binding.regionOverlay.isSelecting = isRegionSelectMode
+        binding.regionOverlay.region = screenshotManager.ocrRecognizer.timeRegion
+        binding.regionOverlay.invalidate()
+
+        if (isRegionSelectMode) {
+            binding.btnSetRegion.text = "完成"
+            player?.pause()
+            Toast.makeText(this, "拖动橙色框调整时间水印识别区域，再点完成", Toast.LENGTH_LONG).show()
+        } else {
+            binding.btnSetRegion.text = getString(R.string.set_time_region)
+        }
+    }
+
+    // --- OCR Region persistence ---
+
+    private fun saveOcrRegion() {
+        val r = screenshotManager.ocrRecognizer.timeRegion
+        getSharedPreferences("ocr_config", MODE_PRIVATE).edit()
+            .putFloat("region_left", r.left)
+            .putFloat("region_top", r.top)
+            .putFloat("region_right", r.right)
+            .putFloat("region_bottom", r.bottom)
+            .apply()
+    }
+
+    private fun loadOcrRegion() {
+        val prefs = getSharedPreferences("ocr_config", MODE_PRIVATE)
+        screenshotManager.ocrRecognizer.timeRegion = android.graphics.RectF(
+            prefs.getFloat("region_left", 0.6f),
+            prefs.getFloat("region_top", 0.85f),
+            prefs.getFloat("region_right", 0.98f),
+            prefs.getFloat("region_bottom", 0.98f)
+        )
     }
 
     // --- Device Config ---
@@ -123,7 +173,6 @@ class MainActivity : AppCompatActivity() {
         deviceConfigs = deviceConfigStore.loadAll()
         refreshDeviceSpinner()
 
-        // Restore selected config
         val selectedId = deviceConfigStore.getSelectedId()
         if (selectedId != -1L) {
             val idx = deviceConfigs.indexOfFirst { it.id == selectedId }
@@ -159,7 +208,7 @@ class MainActivity : AppCompatActivity() {
             dialogBinding.spinnerWatermarkPos.setSelection(existingConfig.position.ordinal)
         }
 
-        val dialog = AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setView(dialogBinding.root)
             .setPositiveButton(if (addMode) "添加" else "保存") { _, _ ->
                 val name = dialogBinding.etDeviceName.text.toString().trim()
@@ -181,9 +230,7 @@ class MainActivity : AppCompatActivity() {
                 loadDeviceConfigs()
             }
             .setNegativeButton("取消", null)
-            .create()
-
-        dialog.show()
+            .show()
     }
 
     private fun deleteSelectedDevice() {
@@ -204,7 +251,6 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    /** Get the watermark position from the currently selected device config. */
     private fun getCurrentWatermarkPosition(): WatermarkPosition {
         val pos = binding.spinnerDevice.selectedItemPosition
         if (deviceConfigs.isEmpty() || pos !in deviceConfigs.indices) {
@@ -226,26 +272,17 @@ class MainActivity : AppCompatActivity() {
     private fun openVideo(uri: Uri) {
         videoUri = uri
         videoPath = null
-        videoDate = null
         pfd?.safeClose()
         pfd = null
 
-        // Try to get file path for MediaMetadataRetriever
         videoPath = getFilePath(uri)
 
-        // Try to get video date from MediaStore
-        videoDate = getVideoDate(uri)
-
-        // If no file path, open FD for MediaMetadataRetriever
         if (videoPath == null) {
             try {
                 pfd = contentResolver.openFileDescriptor(uri, "r")
-            } catch (e: Exception) {
-                // Will try other methods
-            }
+            } catch (_: Exception) {}
         }
 
-        // Set up ExoPlayer
         val mediaItem = MediaItem.fromUri(uri)
         player?.apply {
             setMediaItem(mediaItem)
@@ -264,39 +301,12 @@ class MainActivity : AppCompatActivity() {
             return uri.path
         }
 
-        val projection = arrayOf(MediaStore.Video.Media.DATA)
-        contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val colIndex = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
-                return cursor.getString(colIndex)
-            }
-        }
-        return null
-    }
-
-    private fun getVideoDate(uri: Uri): Date? {
-        val projection = arrayOf(MediaStore.Video.Media.DATE_TAKEN)
         try {
+            val projection = arrayOf(MediaStore.Video.Media.DATA)
             contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
                 if (cursor.moveToFirst()) {
-                    val colIndex = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_TAKEN)
-                    val dateTaken = cursor.getLong(colIndex)
-                    if (dateTaken > 0) {
-                        return Date(dateTaken)
-                    }
-                }
-            }
-        } catch (_: Exception) {}
-
-        val projection2 = arrayOf(MediaStore.Video.Media.DATE_MODIFIED)
-        try {
-            contentResolver.query(uri, projection2, null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val colIndex = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_MODIFIED)
-                    val dateModified = cursor.getLong(colIndex)
-                    if (dateModified > 0) {
-                        return Date(dateModified * 1000)
-                    }
+                    val colIndex = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
+                    return cursor.getString(colIndex)
                 }
             }
         } catch (_: Exception) {}
@@ -307,26 +317,44 @@ class MainActivity : AppCompatActivity() {
     // --- Screenshot ---
 
     private fun captureScreenshot() {
+        if (isRegionSelectMode) {
+            Toast.makeText(this, "请先完成区域选择", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val pos = player?.currentPosition ?: return
         if (pos <= 0 && player?.duration == null) {
             Toast.makeText(this, R.string.no_video, Toast.LENGTH_SHORT).show()
             return
         }
 
+        binding.btnScreenshot.isEnabled = false
         Thread {
             val bitmap = if (videoPath != null) {
-                screenshotManager.captureFrame(videoPath, pos, videoDate)
+                screenshotManager.captureFrame(videoPath, pos)
             } else {
-                screenshotManager.captureFrameFromFd(pfd, pos, videoDate)
+                screenshotManager.captureFrameFromFd(pfd, pos)
             }
 
-            if (bitmap != null) {
-                runOnUiThread {
+            val lastCapture = screenshotManager.getCapture(screenshotManager.captureCount - 1)
+
+            runOnUiThread {
+                binding.btnScreenshot.isEnabled = true
+                if (bitmap != null) {
                     addThumbnail(bitmap, screenshotManager.captureCount - 1)
-                    Toast.makeText(this, "已截图 (${screenshotManager.captureCount})", Toast.LENGTH_SHORT).show()
-                }
-            } else {
-                runOnUiThread {
+
+                    // Show OCR result
+                    if (lastCapture?.ocrDate != null) {
+                        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                        binding.tvOcrTime.text = "识别时间: ${sdf.format(lastCapture.ocrDate)}"
+                        binding.tvOcrTime.visibility = View.VISIBLE
+                        Toast.makeText(this, "已截图 (${screenshotManager.captureCount}) OCR:${sdf.format(lastCapture.ocrDate)}", Toast.LENGTH_SHORT).show()
+                    } else {
+                        binding.tvOcrTime.text = "未识别到时间水印，将使用播放时间"
+                        binding.tvOcrTime.visibility = View.VISIBLE
+                        Toast.makeText(this, "已截图 (${screenshotManager.captureCount}) 未识别到时间", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
                     Toast.makeText(this, "截图失败", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -334,19 +362,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun addThumbnail(bitmap: Bitmap, index: Int) {
-        val size = resources.getDimensionPixelSize(android.R.dimen.thumbnail_width).coerceAtLeast(80)
-        val thumbnail = Bitmap.createScaledBitmap(bitmap, size, size * bitmap.height / bitmap.width, true)
+        val thumbnailSize = 80
+        val thumbnail = Bitmap.createScaledBitmap(
+            bitmap, thumbnailSize,
+            (thumbnailSize * bitmap.height / bitmap.width.toFloat()).toInt(), true
+        )
 
         val iv = ImageView(this).apply {
             setImageBitmap(thumbnail)
-            layoutParams = LinearLayout.LayoutParams(
+            val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.MATCH_PARENT
-            ).apply {
-                marginEnd = 8
-            }
+            )
+            lp.setMargins(0, 0, 8, 0)
+            layoutParams = lp
             setPadding(2, 2, 2, 2)
-            setBackgroundColor(getColor(R.color.thumbnail_border))
+            setBackgroundColor(0xFF4CAF50.toInt())
             scaleType = ImageView.ScaleType.CENTER_CROP
 
             setOnLongClickListener {
@@ -408,15 +439,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun startUpdateLoop() {
         stopUpdateLoop()
-        updateTimer = Timer().apply {
-            scheduleAtFixedRate(object : TimerTask() {
-                override fun run() {
-                    runOnUiThread {
-                        updateSeekBar()
-                    }
-                }
-            }, 0, 50)
-        }
+        updateTimer = Timer()
+        updateTimer?.scheduleAtFixedRate(object : TimerTask() {
+            override fun run() {
+                runOnUiThread { updateSeekBar() }
+            }
+        }, 0, 50)
     }
 
     private fun stopUpdateLoop() {
@@ -447,8 +475,6 @@ class MainActivity : AppCompatActivity() {
             String.format(Locale.getDefault(), "%02d:%02d", m, s)
         }
     }
-
-    // --- Extension ---
 
     private fun ParcelFileDescriptor?.safeClose() {
         try { this?.close() } catch (_: Exception) {}

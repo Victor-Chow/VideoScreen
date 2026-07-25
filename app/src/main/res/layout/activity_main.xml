@@ -29,6 +29,13 @@
             android:textSize="18sp"
             android:visibility="visible" />
 
+        <!-- OCR time region overlay -->
+        <com.screenshot.app.RegionOverlayView
+            android:id="@+id/regionOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
     </FrameLayout>
 
     <!-- Zoomable SeekBar -->
@@ -49,74 +56,113 @@
         android:paddingVertical="4dp"
         android:background="#CC000000" />
 
-    <!-- Controls -->
+    <!-- OCR detected time display -->
+    <TextView
+        android:id="@+id/tvOcrTime"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:textColor="#FF4CAF50"
+        android:textSize="13sp"
+        android:paddingVertical="2dp"
+        android:background="#CC000000"
+        android:visibility="gone" />
+
+    <!-- Controls row 1 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center"
-        android:paddingVertical="8dp"
-        android:paddingHorizontal="12dp"
+        android:paddingVertical="4dp"
+        android:paddingHorizontal="8dp"
         android:background="#CC000000">
 
         <Button
             android:id="@+id/btnOpen"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="wrap_content"
-            android:layout_height="44dp"
+            android:layout_height="40dp"
             android:text="@string/open_video"
             android:textColor="@color/white"
             app:strokeColor="@color/white"
-            android:layout_marginEnd="8dp" />
+            android:layout_marginEnd="6dp" />
 
         <Button
             android:id="@+id/btnScreenshot"
             style="@style/Widget.MaterialComponents.Button"
             android:layout_width="wrap_content"
-            android:layout_height="44dp"
+            android:layout_height="40dp"
             android:text="@string/screenshot"
-            android:layout_marginEnd="8dp" />
+            android:layout_marginEnd="6dp" />
 
         <Button
             android:id="@+id/btnSave"
             style="@style/Widget.MaterialComponents.Button"
             android:layout_width="wrap_content"
-            android:layout_height="44dp"
+            android:layout_height="40dp"
             android:backgroundTint="@color/accent"
             android:text="@string/save_all"
-            android:layout_marginEnd="8dp" />
+            android:layout_marginEnd="6dp" />
+
+        <Button
+            android:id="@+id/btnSetRegion"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="@string/set_time_region"
+            android:textColor="@color/white"
+            app:strokeColor="@color/white" />
+
+    </LinearLayout>
+
+    <!-- Controls row 2: device config -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingVertical="4dp"
+        android:paddingHorizontal="8dp"
+        android:background="#CC000000">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/device_config_label"
+            android:textColor="@color/white"
+            android:textSize="13sp"
+            android:layout_marginEnd="4dp" />
 
         <Spinner
             android:id="@+id/spinnerDevice"
             android:layout_width="0dp"
-            android:layout_height="44dp"
+            android:layout_height="40dp"
             android:layout_weight="1"
             android:popupBackground="#FF333333" />
 
-        <ImageButton
+        <ImageView
             android:id="@+id/btnAddDevice"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:src="@android:drawable/ic_input_add"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@android:drawable/ic_menu_add"
             android:contentDescription="@string/add_device"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            app:tint="@color/white" />
+            android:padding="4dp" />
 
-        <ImageButton
+        <ImageView
             android:id="@+id/btnDeleteDevice"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
             android:src="@android:drawable/ic_menu_delete"
             android:contentDescription="@string/delete_device"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            app:tint="@color/white" />
+            android:padding="4dp" />
 
     </LinearLayout>
 
     <!-- Thumbnail strip -->
     <HorizontalScrollView
         android:layout_width="match_parent"
-        android:layout_height="100dp"
+        android:layout_height="90dp"
         android:background="#CC000000">
 
         <LinearLayout
