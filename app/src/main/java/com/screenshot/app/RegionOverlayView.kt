@@ -22,7 +22,7 @@ class RegionOverlayView @JvmOverloads constructor(
 
     /** The selected region as a fraction (0..1) of the view size. */
     var region: RectF = RectF(0.6f, 0.85f, 0.98f, 0.98f)
-        private set
+        internal set
 
     var onRegionChanged: ((RectF) -> Unit)? = null
 
