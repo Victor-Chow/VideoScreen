@@ -46,17 +46,79 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
 
-        screenshotManager = ScreenshotManager(applicationContext)
-        deviceConfigStore = DeviceConfigStore(this)
+        // Check for crash from previous launch FIRST
+        val lastCrash = CrashHandler.getCrash(this)
+        if (lastCrash != null) {
+            // Don't clear crash info until user confirms — so it persists even if showErrorScreen fails
+            showErrorScreen("上次崩溃信息（点击返回关闭）:\n\n$lastCrash") {
+                CrashHandler.clearCrash(this)
+                // Restart the activity normally
+                recreate()
+            }
+            return
+        }
 
-        setupPlayer()
-        setupControls()
-        loadDeviceConfigs()
-        loadOcrRegion()
-        handleIntent(intent)
+        try {
+            binding = ActivityMainBinding.inflate(layoutInflater)
+            setContentView(binding.root)
+
+            screenshotManager = ScreenshotManager(applicationContext)
+            deviceConfigStore = DeviceConfigStore(this)
+
+            setupPlayer()
+            setupControls()
+            loadDeviceConfigs()
+            loadOcrRegion()
+            handleIntent(intent)
+        } catch (e: Throwable) {
+            showErrorScreen("初始化错误:\n\n${e.stackTraceToString()}")
+        }
+    }
+
+    private fun showErrorScreen(message: String, onDismiss: (() -> Unit)? = null) {
+        try {
+            val sv = android.widget.ScrollView(this)
+            val tv = android.widget.TextView(this)
+            tv.text = message
+            tv.textSize = 12f
+            tv.setPadding(32, 32, 32, 32)
+            tv.setTextIsSelectable(true)
+            sv.addView(tv)
+            setContentView(sv)
+
+            // Press back to dismiss
+            if (onDismiss != null) {
+                sv.isFocusableInTouchMode = true
+                sv.requestFocus()
+                sv.setOnKeyListener { _, keyCode, event ->
+                    if (keyCode == android.view.KeyEvent.KEYCODE_BACK && event.action == android.view.KeyEvent.ACTION_UP) {
+                        onDismiss()
+                        true
+                    } else false
+                }
+            }
+        } catch (e: Throwable) {
+            // Last resort: write to system log
+            android.util.Log.e("ScreenshotApp", "Failed to show error screen", e)
+            android.util.Log.e("ScreenshotApp", "Original error: $message")
+        }
+    }
+
+    private fun showFatalError(e: Exception) {
+        android.util.Log.e("ScreenshotApp", "Fatal error in onCreate", e)
+        try {
+            val sv = android.widget.ScrollView(this)
+            val tv = android.widget.TextView(this)
+            tv.text = "初始化错误:\n\n${e.stackTraceToString()}"
+            tv.textSize = 12f
+            tv.setPadding(32, 32, 32, 32)
+            tv.setTextIsSelectable(true)
+            sv.addView(tv)
+            setContentView(sv)
+        } catch (_: Exception) {
+            // If even error display fails, nothing we can do
+        }
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -331,10 +393,15 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnScreenshot.isEnabled = false
         Thread {
-            val bitmap = if (videoPath != null) {
-                screenshotManager.captureFrame(videoPath, pos)
-            } else {
-                screenshotManager.captureFrameFromFd(pfd, pos)
+            val bitmap = try {
+                if (videoPath != null) {
+                    screenshotManager.captureFrame(videoPath, pos)
+                } else {
+                    screenshotManager.captureFrameFromFd(pfd, pos)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ScreenshotApp", "Capture failed", e)
+                null
             }
 
             val lastCapture = screenshotManager.getCapture(screenshotManager.captureCount - 1)
@@ -344,7 +411,6 @@ class MainActivity : AppCompatActivity() {
                 if (bitmap != null) {
                     addThumbnail(bitmap, screenshotManager.captureCount - 1)
 
-                    // Show OCR result
                     if (lastCapture?.ocrDate != null) {
                         val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                         binding.tvOcrTime.text = "识别时间: ${sdf.format(lastCapture.ocrDate)}"
